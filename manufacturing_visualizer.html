@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manufacturing Line Visualizer & VSM Engine</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-takt: #ec4899;
+            --accent-cycle: #3b82f6;
+            --accent-lead: #10b981;
+            --accent-wait: #f59e0b;
+            --accent-bva: #8b5cf6;
+            --text-light: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --green-part: #22c55e;
+            --red-part: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-light); padding: 20px; display: flex; flex-direction: column; gap: 20px; max-width: 1600px; margin: 0 auto; }
+        h1 { text-align: center; font-size: 1.8rem; }
+        .subtitle { text-align: center; color: var(--text-muted); font-size: 0.95rem; margin-bottom: 5px; }
+        .info-note { max-width: 900px; margin: 0 auto 10px auto; background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 16px; font-size: 0.8rem; line-height: 1.6; color: var(--text-light); }
+        .info-note strong { color: var(--accent-bva); }
+
+        .kpi-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 10px; }
+        @media(max-width: 1400px) { .kpi-grid { grid-template-columns: repeat(5, 1fr); } }
+        @media(max-width: 900px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media(max-width: 560px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+        .kpi-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; text-align: center; }
+        .kpi-title { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: bold; letter-spacing: 0.5px; }
+        .kpi-value { font-size: 1.3rem; font-weight: bold; margin-top: 4px; }
+        .kpi-value.submitted { color: var(--accent-cycle); }
+        .kpi-value.delivered { color: var(--accent-lead); }
+        .kpi-value.balance { color: var(--accent-wait); }
+        .kpi-value.leadtime { color: #f43f5e; }
+        .kpi-value.totalct { color: #38bdf8; }
+        .kpi-value.minct { color: #a3e635; }
+        .kpi-value.maxct { color: #fb923c; }
+        .kpi-value.alltime { color: #c084fc; }
+        .kpi-value.avgtime { color: #2dd4bf; }
+        .kpi-value.efficiency { color: #facc15; }
+
+        .stats-table-wrap { overflow-x: auto; }
+        .best-strategy-row { background-color: rgba(16, 185, 129, 0.12); }
+        .best-strategy-row td:first-child { color: var(--accent-lead); font-weight: bold; }
+        .throughput-summary { font-size: 0.85rem; line-height: 1.6; color: var(--text-light); background-color: var(--bg-color); border-radius: 6px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-color); }
+        .throughput-summary b { color: var(--accent-bva); }
+        .throughput-summary .bottleneck-tag { color: var(--red-part); font-weight: bold; }
+
+        .controls-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
+        @media(max-width: 900px) { .controls-grid { grid-template-columns: 1fr; } }
+
+        .card { background-color: var(--card-bg); border-radius: 8px; padding: 15px; border: 1px solid var(--border-color); }
+        .card-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 10px; font-weight: bold; }
+
+        .mapping-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        .mapping-table th, .mapping-table td { border: 1px solid var(--border-color); padding: 6px; text-align: center; }
+        .mapping-table th { background-color: rgba(0,0,0,0.2); color: var(--text-muted); }
+
+        select.map-select { background-color: var(--bg-color); color: var(--text-light); border: 1px solid var(--border-color); padding: 2px 4px; border-radius: 4px; font-weight: bold; }
+        select.map-select.Green { color: var(--green-part); }
+        select.map-select.Red { color: var(--red-part); }
+
+        .order-form { display: flex; flex-direction: column; gap: 10px; }
+        .form-group { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+        select.form-control, input.form-control { background-color: var(--bg-color); color: var(--text-light); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; }
+
+        .btn { background-color: var(--accent-cycle); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn:hover { opacity: 0.9; }
+
+        .visualization { background-color: var(--card-bg); border-radius: 8px; padding: 20px; position: relative; overflow-x: auto; }
+        .pipeline { display: flex; justify-content: space-between; align-items: flex-start; min-width: 1300px; position: relative; padding: 30px 0; }
+        .track-line { position: absolute; top: 85px; left: 20px; right: 20px; height: 4px; background-color: var(--border-color); z-index: 1; }
+
+        .workcenter { background-color: var(--bg-color); border: 2px solid var(--accent-cycle); border-radius: 8px; width: 160px; padding: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 2; position: relative; }
+        .wc-title-input { width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--border-color); color: var(--accent-cycle); font-weight: bold; font-size: 0.85rem; text-align: center; padding: 2px 0; }
+        .wc-title-input:focus { outline: none; border-bottom-color: var(--accent-cycle); }
+        
+        .wc-fields { display: flex; flex-direction: column; gap: 4px; font-size: 0.7rem; }
+        .wc-field-row { display: flex; justify-content: space-between; align-items: center; }
+        .wc-field-row label { color: var(--text-muted); font-size: 0.68rem; }
+        .wc-field-input { width: 42px; text-align: center; background-color: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-light); border-radius: 3px; font-size: 0.7rem; padding: 1px; }
+        .wc-field-input:focus { outline: none; border-color: var(--accent-cycle); }
+
+        .wc-slot { width: 32px; height: 32px; border: 1px dashed var(--border-color); border-radius: 6px; display: flex; align-items: center; justify-content: center; position: relative; margin: 4px auto 0 auto; }
+        .wc-status { font-size: 0.65rem; font-weight: bold; color: var(--text-muted); text-align: center; margin-top: 2px; }
+        .wc-efficiency { font-size: 0.62rem; text-align: center; margin-top: 2px; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 3px; }
+        .wc-efficiency .eff-val { font-weight: bold; }
+
+        .block-unit { width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: bold; color: white; position: absolute; transition: all 0.3s linear; z-index: 5; }
+        .block-unit.Green { background-color: var(--green-part); box-shadow: 0 0 8px var(--green-part); }
+        .block-unit.Red { background-color: var(--red-part); box-shadow: 0 0 8px var(--red-part); }
+        .block-unit.blocked { animation: pulse-block 0.8s infinite alternate; }
+
+        @keyframes pulse-block { from { border: 2px solid transparent; } to { border: 2px solid var(--accent-wait); } }
+
+        .queue-container { margin-top: 15px; background-color: var(--bg-color); border-radius: 6px; padding: 10px; display: flex; align-items: center; gap: 10px; overflow-x: auto; }
+        .queue-label { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; font-weight: bold; }
+        .queue-list { display: flex; gap: 8px; }
+        .queue-item { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; display: flex; align-items: center; gap: 5px; background-color: var(--card-bg); border: 1px solid var(--border-color); }
+        .badge-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        .chart-container { background-color: var(--card-bg); border-radius: 8px; padding: 20px; }
+        .bars-wrapper { display: flex; flex-direction: column; gap: 8px; }
+        .bar-row { display: flex; align-items: center; gap: 10px; }
+        .bar-label { width: 110px; font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .bar-track { flex-grow: 1; background-color: var(--bg-color); height: 18px; border-radius: 4px; position: relative; }
+        .bar-fill { height: 100%; background-color: var(--accent-cycle); width: 0%; border-radius: 4px; transition: width 0.3s; }
+        .bar-fill.exceeds { background-color: var(--red-part); }
+        .takt-line-overlay { position: absolute; top: 0; bottom: 0; width: 2px; background-color: var(--accent-takt); z-index: 5; }
+        .bar-val { width: 50px; font-size: 0.8rem; text-align: right; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>Manufacturing Line Visualizer & VSM Engine</h1>
+    <div class="subtitle">Editable Workcenter Parameters & Real-Time Analytics</div>
+
+    <div class="info-note">
+        <strong>Part Mapping:</strong> Each customer has 4 part numbers on record, but internally every part is classified into just 2 physical types —
+        <span style="color: var(--green-part); font-weight:bold;">Green</span> or <span style="color: var(--red-part); font-weight:bold;">Red</span> —
+        and it's that Green/Red type, not the specific part number, that actually moves through the line.<br>
+        <strong>Customer Order Rule:</strong> A customer's next order will not be loaded into the line/queue until that customer's earlier order has been fully delivered — only one order per customer can be in-process at any time.
+    </div>
+
+    <!-- KPI Summary Row -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-title">Total Submitted</div>
+            <div class="kpi-value submitted" id="kpi-submitted">0</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Total Delivered</div>
+            <div class="kpi-value delivered" id="kpi-delivered">0</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Order Balance</div>
+            <div class="kpi-value balance" id="kpi-balance">0</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Lead Time (1st to End)</div>
+            <div class="kpi-value leadtime" id="kpi-leadtime">0s</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Overall Cycle Time</div>
+            <div class="kpi-value totalct" id="kpi-totalct">0s</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Shortest WC Cycle Time</div>
+            <div class="kpi-value minct" id="kpi-minct">0s</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Longest WC Cycle Time</div>
+            <div class="kpi-value maxct" id="kpi-maxct">0s</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">All Orders Total Time</div>
+            <div class="kpi-value alltime" id="kpi-alltime">0s</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Avg Order Completion</div>
+            <div class="kpi-value avgtime" id="kpi-avgtime">0s</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title" title="(VA + BVA) / Total Cycle Time, summed across all workcenters">Process Efficiency</div>
+            <div class="kpi-value efficiency" id="kpi-efficiency">0%</div>
+        </div>
+    </div>
+
+    <div class="controls-grid">
+        <div class="card">
+            <div class="card-title">Customer Part Mapping (5 Customers × 4 Parts)</div>
+            <table class="mapping-table">
+                <thead>
+                    <tr><th>Customer</th><th>Part 1</th><th>Part 2</th><th>Part 3</th><th>Part 4</th><th>Status</th></tr>
+                </thead>
+                <tbody id="mapping-body"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Order Entry & Simulation Controls</div>
+            <div class="order-form">
+                <div class="form-group">
+                    <label>Customer:</label>
+                    <select id="order-cust-select" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label>Part Number:</label>
+                    <select id="order-part-select" class="form-control"></select>
+                </div>
+                <button class="btn" id="btn-add-order">+ Submit Order</button>
+                <hr style="border-color: var(--border-color); margin: 5px 0;">
+                <div class="form-group">
+                    <label title="Takt Time = Demand / Duration — the available production time divided by customer demand, i.e. how often one unit must be completed to keep up with demand.">Takt Time Target (s):</label>
+                    <input type="number" id="takt-input" value="6" class="form-control" style="width: 60px;" title="Takt Time = Demand / Duration">
+                </div>
+                <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: -6px;">
+                    Takt Time = Demand ÷ Duration (available working time ÷ customer demand rate)
+                </div>
+                <div class="form-group">
+                    <label>Speed Multiplier:</label>
+                    <input type="number" id="speed-input" value="1" min="0.2" max="5" step="0.2" class="form-control" style="width: 60px;">
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" id="btn-toggle" style="flex: 1;">Pause</button>
+                    <button class="btn" id="btn-reset" style="background-color: var(--border-color); flex: 1;">Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Order Summary -->
+    <div class="card">
+        <div class="card-title">Customer Order Summary</div>
+        <div class="stats-table-wrap">
+            <table class="mapping-table" id="customer-stats-table">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Submitted</th>
+                        <th>Delivered</th>
+                        <th>Balance</th>
+                        <th>Total Time (Delivered)</th>
+                        <th>Avg Time</th>
+                        <th>Min Time</th>
+                        <th>Max Time</th>
+                    </tr>
+                </thead>
+                <tbody id="customer-stats-body"></tbody>
+                <tfoot id="customer-stats-foot"></tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pipeline Visualizer -->
+    <div class="visualization">
+        <div class="pipeline" id="pipeline">
+            <div class="track-line"></div>
+        </div>
+        <div class="queue-container">
+            <div class="queue-label">Pending Queue:</div>
+            <div class="queue-list" id="queue-list">
+                <span style="font-size:0.75rem; color: var(--text-muted);">No pending orders.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cycle Time Chart -->
+    <div class="chart-container">
+        <div class="card-title">Workcenter Total Cycle Times vs Takt Target</div>
+        <div class="bars-wrapper" id="bars-wrapper"></div>
+    </div>
+
+    <!-- Throughput Optimizer -->
+    <div class="chart-container">
+        <div class="card-title">Throughput Optimizer — Best Order Combination</div>
+        <div class="throughput-summary" id="throughput-summary">
+            Click "Analyze" to calculate the theoretical throughput ceiling from the current workcenter times, and compare customer-order combinations by simulating them against those times.
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom: 12px;">
+            <button class="btn" id="btn-analyze-throughput">Analyze Optimal Combination</button>
+            <span style="font-size:0.75rem; color: var(--text-muted);">Runs a fast offline simulation (30 min of simulated time) — does not affect the live line above.</span>
+        </div>
+        <div class="stats-table-wrap">
+            <table class="mapping-table" id="throughput-results-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Order Combination Strategy</th>
+                        <th>Delivered / 30 min</th>
+                        <th>Throughput (orders/min)</th>
+                        <th>Throughput (orders/hr)</th>
+                    </tr>
+                </thead>
+                <tbody id="throughput-results-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const numWorkcenters = 7;
+        const numCustomers = 5;
+        const partsPerCustomer = 4;
+
+        let wcNames = ["BD", "MH", "QC", "BL", "PK", "BD", "None"];
+
+        // Extended VSM metrics per work center
+        // va/nva/bva    = value-add / non-value-add / business-value-add processing time (s)
+        // waitTime      = waiting time at the workcenter (s) — part of Overall Cycle Time
+        // transportTime = manual transport time owned by THIS workcenter, moving output to the next station (s) — part of Overall Cycle Time
+        // autoTransportTime = separate, automated/conveyor transport time between this workcenter and the next (s), default 0 — also part of Overall Cycle Time
+        // queueTime     = queue time at the workcenter (s) — part of Lead Time only, not Cycle Time
+        let wcData = [
+            { va: 0, nva: 8,  bva: 0, waitTime: 0, transportTime: 1, autoTransportTime: 0, queueTime: 0 },  // BD
+            { va: 0, nva: 7,  bva: 0, waitTime: 0, transportTime: 1, autoTransportTime: 0, queueTime: 0 },  // MH
+            { va: 0, nva: 5,  bva: 0, waitTime: 0, transportTime: 1, autoTransportTime: 0, queueTime: 0 },  // QC
+            { va: 0, nva: 12, bva: 0, waitTime: 0, transportTime: 1, autoTransportTime: 0, queueTime: 0 },  // BL
+            { va: 0, nva: 18, bva: 0, waitTime: 0, transportTime: 1, autoTransportTime: 0, queueTime: 0 },  // PK
+            { va: 0, nva: 2,  bva: 0, waitTime: 0, transportTime: 1, autoTransportTime: 0, queueTime: 0 },  // BD
+            { va: 0, nva: 0,  bva: 0, waitTime: 0, transportTime: 1, autoTransportTime: 0, queueTime: 0 }   // None
+        ];
+
+        let taktTime = 6;
+        let simSpeed = 1;
+        let isRunning = true;
+
+        let totalSubmitted = 0;
+        let totalDelivered = 0;
+
+        // --- Time-tracking additions ---
+        let simClock = 0;               // accumulated simulated seconds (advances only while running)
+        let firstSubmitSimTime = null;  // sim time when the current "batch" (balance 0 -> >0) started
+        let allOrdersMakespan = 0;      // time taken to clear the last full batch (all orders delivered)
+        let allCompletionTimes = [];    // completion (submit->deliver) time for every delivered order, across customers
+
+        let customerStats = Array.from({ length: numCustomers }, () => ({
+            submitted: 0,
+            delivered: 0,
+            times: []
+        }));
+
+        // Customer 1: default alternating pattern (Green, Red, Green, Red)
+        // Customer 2: Green, Red, Red, Red
+        // Customer 3: 3 Green, 1 Red
+        // Customer 4: all Red
+        // Customer 5: default alternating pattern (Green, Red, Green, Red)
+        let customerMappings = [
+            ['Green', 'Red', 'Green', 'Red'],
+            ['Green', 'Red', 'Red', 'Red'],
+            ['Green', 'Green', 'Green', 'Red'],
+            ['Red', 'Red', 'Red', 'Red'],
+            ['Green', 'Red', 'Green', 'Red']
+        ];
+
+        let activeCustomerOrders = Array(numCustomers).fill(false);
+        let orderQueue = [];
+        let orderCounter = 1;
+        let wcOccupancy = Array(numWorkcenters).fill(null);
+
+        const mappingBody = document.getElementById('mapping-body');
+        const orderCustSelect = document.getElementById('order-cust-select');
+        const orderPartSelect = document.getElementById('order-part-select');
+        const pipelineEl = document.getElementById('pipeline');
+        const queueListEl = document.getElementById('queue-list');
+        const barsWrapperEl = document.getElementById('bars-wrapper');
+
+        // Total CT per workcenter = VA + NVA + BVA + Waiting Time + Manual Transport + Auto Transport
+        function getWcTotalCT(i) {
+            const wc = wcData[i];
+            return (wc.va || 0) + (wc.nva || 0) + (wc.bva || 0) + (wc.waitTime || 0) + (wc.transportTime || 0) + (wc.autoTransportTime || 0);
+        }
+
+        // Total Workcenter Lead Time = Total CT (incl. wait & both transport types) + Queue Time
+        function getWcTotalLeadTime(i) {
+            const wc = wcData[i];
+            return getWcTotalCT(i) + (wc.queueTime || 0);
+        }
+
+        // Efficiency = (VA + BVA) / Total Cycle Time — the share of a workcenter's cycle
+        // time that is actually value-adding (as opposed to NVA, waiting, or transport).
+        function getWcEfficiency(i) {
+            const wc = wcData[i];
+            const ct = getWcTotalCT(i);
+            if (ct <= 0) return 0;
+            return ((wc.va || 0) + (wc.bva || 0)) / ct * 100;
+        }
+
+        // Line-wide efficiency, aggregated across all workcenters
+        function getOverallEfficiency() {
+            let totalVABVA = 0;
+            let totalCT = 0;
+            for (let i = 0; i < numWorkcenters; i++) {
+                const wc = wcData[i];
+                totalVABVA += (wc.va || 0) + (wc.bva || 0);
+                totalCT += getWcTotalCT(i);
+            }
+            return totalCT > 0 ? (totalVABVA / totalCT) * 100 : 0;
+        }
+
+        // Analytics calculation
+        function calculateLineMetrics() {
+            let overallCT = 0;
+            let totalLeadTime = 0;
+            let minCT = Infinity;
+            let maxCT = -Infinity;
+
+            for (let i = 0; i < numWorkcenters; i++) {
+                const ct = getWcTotalCT(i);
+                const lt = getWcTotalLeadTime(i);
+
+                overallCT += ct;
+                totalLeadTime += lt;
+
+                if (ct < minCT) minCT = ct;
+                if (ct > maxCT) maxCT = ct;
+            }
+
+            if (minCT === Infinity) minCT = 0;
+            if (maxCT === -Infinity) maxCT = 0;
+
+            const efficiency = getOverallEfficiency();
+
+            return { overallCT, totalLeadTime, minCT, maxCT, efficiency };
+        }
+
+        function updateKpis() {
+            const balance = totalSubmitted - totalDelivered;
+            const metrics = calculateLineMetrics();
+
+            document.getElementById('kpi-submitted').innerText = totalSubmitted;
+            document.getElementById('kpi-delivered').innerText = totalDelivered;
+            document.getElementById('kpi-balance').innerText = Math.max(0, balance);
+            
+            document.getElementById('kpi-leadtime').innerText = metrics.totalLeadTime + 's';
+            document.getElementById('kpi-totalct').innerText = metrics.overallCT + 's';
+            document.getElementById('kpi-minct').innerText = metrics.minCT + 's';
+            document.getElementById('kpi-maxct').innerText = metrics.maxCT + 's';
+            document.getElementById('kpi-efficiency').innerText = metrics.efficiency.toFixed(1) + '%';
+
+            const alltimeEl = document.getElementById('kpi-alltime');
+            if (balance > 0 && firstSubmitSimTime !== null) {
+                alltimeEl.innerText = `${(simClock - firstSubmitSimTime).toFixed(1)}s…`;
+            } else if (allOrdersMakespan > 0) {
+                alltimeEl.innerText = `${allOrdersMakespan.toFixed(1)}s`;
+            } else {
+                alltimeEl.innerText = '0s';
+            }
+
+            const avgEl = document.getElementById('kpi-avgtime');
+            if (allCompletionTimes.length > 0) {
+                const avg = allCompletionTimes.reduce((a, b) => a + b, 0) / allCompletionTimes.length;
+                avgEl.innerText = `${avg.toFixed(1)}s`;
+            } else {
+                avgEl.innerText = '0s';
+            }
+
+            renderCustomerStats();
+        }
+
+        function renderCustomerStats() {
+            const body = document.getElementById('customer-stats-body');
+            const foot = document.getElementById('customer-stats-foot');
+            if (!body) return;
+            body.innerHTML = '';
+
+            let gTotalSub = 0, gTotalDel = 0, gTotalTime = 0, gCount = 0, gMin = Infinity, gMax = -Infinity;
+
+            for (let c = 0; c < numCustomers; c++) {
+                const s = customerStats[c];
+                const bal = s.submitted - s.delivered;
+                const total = s.times.reduce((a, b) => a + b, 0);
+                const avg = s.times.length ? total / s.times.length : 0;
+                const min = s.times.length ? Math.min(...s.times) : 0;
+                const max = s.times.length ? Math.max(...s.times) : 0;
+
+                gTotalSub += s.submitted;
+                gTotalDel += s.delivered;
+                gTotalTime += total;
+                gCount += s.times.length;
+                if (s.times.length) {
+                    gMin = Math.min(gMin, min);
+                    gMax = Math.max(gMax, max);
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>Cust ${c + 1}</strong></td>
+                    <td>${s.submitted}</td>
+                    <td>${s.delivered}</td>
+                    <td style="color: ${bal > 0 ? 'var(--accent-wait)' : 'var(--accent-lead)'};">${Math.max(0, bal)}</td>
+                    <td>${total.toFixed(1)}s</td>
+                    <td>${avg.toFixed(1)}s</td>
+                    <td>${s.times.length ? min.toFixed(1) + 's' : '—'}</td>
+                    <td>${s.times.length ? max.toFixed(1) + 's' : '—'}</td>
+                `;
+                body.appendChild(tr);
+            }
+
+            if (foot) {
+                const overallBal = gTotalSub - gTotalDel;
+                const overallAvg = gCount ? gTotalTime / gCount : 0;
+                foot.innerHTML = `
+                    <tr style="font-weight:bold; background-color: rgba(0,0,0,0.2);">
+                        <td>All Customers</td>
+                        <td>${gTotalSub}</td>
+                        <td>${gTotalDel}</td>
+                        <td>${Math.max(0, overallBal)}</td>
+                        <td>${gTotalTime.toFixed(1)}s</td>
+                        <td>${overallAvg.toFixed(1)}s</td>
+                        <td>${gCount ? gMin.toFixed(1) + 's' : '—'}</td>
+                        <td>${gCount ? gMax.toFixed(1) + 's' : '—'}</td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderMappingTable() {
+            mappingBody.innerHTML = '';
+            for (let c = 0; c < numCustomers; c++) {
+                const tr = document.createElement('tr');
+                let html = `<td><strong>Cust ${c + 1}</strong></td>`;
+                for (let p = 0; p < partsPerCustomer; p++) {
+                    const color = customerMappings[c][p];
+                    html += `
+                        <td>
+                            <select class="map-select ${color}" data-cust="${c}" data-part="${p}">
+                                <option value="Green" ${color === 'Green' ? 'selected' : ''}>Green</option>
+                                <option value="Red" ${color === 'Red' ? 'selected' : ''}>Red</option>
+                            </select>
+                        </td>`;
+                }
+                const isLocked = activeCustomerOrders[c];
+                html += `<td><span style="color: ${isLocked ? 'var(--accent-wait)' : 'var(--accent-lead)'}; font-weight:bold;">${isLocked ? 'Active' : 'Idle'}</span></td>`;
+                tr.innerHTML = html;
+                mappingBody.appendChild(tr);
+            }
+
+            document.querySelectorAll('.map-select').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const c = parseInt(e.target.dataset.cust);
+                    const p = parseInt(e.target.dataset.part);
+                    const val = e.target.value;
+                    customerMappings[c][p] = val;
+                    e.target.className = `map-select ${val}`;
+                });
+            });
+        }
+
+        function renderDropdowns() {
+            orderCustSelect.innerHTML = '';
+            for (let c = 0; c < numCustomers; c++) {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.innerText = `Customer ${c + 1}`;
+                orderCustSelect.appendChild(opt);
+            }
+            orderPartSelect.innerHTML = '';
+            for (let p = 0; p < partsPerCustomer; p++) {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.innerText = `Part P${p + 1}`;
+                orderPartSelect.appendChild(opt);
+            }
+        }
+
+        function renderWorkcentersUI() {
+            const existing = pipelineEl.querySelectorAll('.workcenter');
+            existing.forEach(el => el.remove());
+
+            for (let i = 0; i < numWorkcenters; i++) {
+                const wc = document.createElement('div');
+                wc.className = 'workcenter';
+                wc.id = `wc-node-${i}`;
+                const data = wcData[i];
+
+                wc.innerHTML = `
+                    <input type="text" class="wc-title-input" value="${wcNames[i]}" data-idx="${i}" title="Edit Workcenter Name">
+                    <div class="wc-fields">
+                        <div class="wc-field-row"><label title="Value-Add time (counts toward Cycle Time)">VA (s):</label><input type="number" class="wc-field-input" data-field="va" data-idx="${i}" value="${data.va}" min="0"></div>
+                        <div class="wc-field-row"><label title="Non-Value-Add time (counts toward Cycle Time)">NVA (s):</label><input type="number" class="wc-field-input" data-field="nva" data-idx="${i}" value="${data.nva}" min="0"></div>
+                        <div class="wc-field-row"><label title="Business-Value-Add time (counts toward Cycle Time)">BVA (s):</label><input type="number" class="wc-field-input" data-field="bva" data-idx="${i}" value="${data.bva}" min="0"></div>
+                        <div class="wc-field-row"><label title="Waiting time at this workcenter (counts toward Cycle Time)">Wait (s):</label><input type="number" class="wc-field-input" data-field="waitTime" data-idx="${i}" value="${data.waitTime}" min="0"></div>
+                        <div class="wc-field-row"><label title="Queue time at this workcenter (Lead Time only, not Cycle Time)">Queue (s):</label><input type="number" class="wc-field-input" data-field="queueTime" data-idx="${i}" value="${data.queueTime}" min="0"></div>
+                        <div class="wc-field-row"><label title="Manual transport time — this workcenter is responsible for it (counts toward Cycle Time)">Trans, Manual (s):</label><input type="number" class="wc-field-input" data-field="transportTime" data-idx="${i}" value="${data.transportTime}" min="0"></div>
+                        <div class="wc-field-row"><label title="Automated/conveyor transport time between this workcenter and the next — not owned by a person (counts toward Cycle Time). Default 0.">Trans, Auto (s):</label><input type="number" class="wc-field-input" data-field="autoTransportTime" data-idx="${i}" value="${data.autoTransportTime}" min="0"></div>
+                    </div>
+                    <div class="wc-efficiency" id="wc-eff-${i}" title="(VA + BVA) / Total Cycle Time">Eff: 0%</div>
+                    <div class="wc-slot" id="wc-slot-${i}"></div>
+                    <div class="wc-status" id="wc-status-${i}">Ready</div>
+                `;
+                pipelineEl.appendChild(wc);
+            }
+
+            document.querySelectorAll('.wc-title-input').forEach(inp => {
+                inp.addEventListener('input', (e) => {
+                    const idx = parseInt(e.target.dataset.idx);
+                    wcNames[idx] = e.target.value || `WC ${idx + 1}`;
+                    const lblEl = document.getElementById(`bar-lbl-${idx}`);
+                    if (lblEl) lblEl.innerText = wcNames[idx];
+                });
+            });
+
+            document.querySelectorAll('.wc-field-input').forEach(inp => {
+                inp.addEventListener('input', (e) => {
+                    const idx = parseInt(e.target.dataset.idx);
+                    const field = e.target.dataset.field;
+                    const val = Math.max(0, parseFloat(e.target.value) || 0);
+                    wcData[idx][field] = val;
+                    recalculateMetrics();
+                    updateKpis();
+                    updateAllWcEfficiencyBadges();
+                });
+            });
+
+            updateAllWcEfficiencyBadges();
+        }
+
+        // Colour-codes and refreshes the per-workcenter "Eff: XX%" badges
+        function updateAllWcEfficiencyBadges() {
+            for (let i = 0; i < numWorkcenters; i++) {
+                const el = document.getElementById(`wc-eff-${i}`);
+                if (!el) continue;
+                const eff = getWcEfficiency(i);
+                let color = 'var(--text-muted)';
+                if (eff >= 70) color = 'var(--accent-lead)';
+                else if (eff >= 40) color = 'var(--accent-wait)';
+                else if (getWcTotalCT(i) > 0) color = 'var(--red-part)';
+                el.innerHTML = `Eff: <span class="eff-val" style="color:${color};">${eff.toFixed(0)}%</span>`;
+            }
+        }
+
+        function renderChartUI() {
+            barsWrapperEl.innerHTML = '';
+            for (let i = 0; i < numWorkcenters; i++) {
+                const row = document.createElement('div');
+                row.className = 'bar-row';
+                row.innerHTML = `
+                    <div class="bar-label" id="bar-lbl-${i}">${wcNames[i]}</div>
+                    <div class="bar-track">
+                        <div class="bar-fill" id="bar-fill-${i}"></div>
+                        <div class="takt-line-overlay" id="takt-line-${i}"></div>
+                    </div>
+                    <div class="bar-val" id="bar-val-${i}">0s</div>
+                `;
+                barsWrapperEl.appendChild(row);
+            }
+            recalculateMetrics();
+        }
+
+        function recalculateMetrics() {
+            taktTime = parseFloat(document.getElementById('takt-input').value) || 1;
+            const allCTs = wcData.map((_, idx) => getWcTotalCT(idx));
+            const maxGraphScale = Math.max(taktTime, Math.max(...allCTs)) * 1.2;
+
+            for (let i = 0; i < numWorkcenters; i++) {
+                const ct = getWcTotalCT(i);
+                const fillEl = document.getElementById(`bar-fill-${i}`);
+                if (fillEl) {
+                    fillEl.style.width = `${(ct / maxGraphScale) * 100}%`;
+                    if (ct > taktTime) fillEl.classList.add('exceeds');
+                    else fillEl.classList.remove('exceeds');
+                }
+                const taktEl = document.getElementById(`takt-line-${i}`);
+                if (taktEl) taktEl.style.left = `${(taktTime / maxGraphScale) * 100}%`;
+                const valEl = document.getElementById(`bar-val-${i}`);
+                if (valEl) valEl.innerText = ct + 's';
+            }
+        }
+
+        document.getElementById('btn-add-order').addEventListener('click', () => {
+            const c = parseInt(orderCustSelect.value);
+            const p = parseInt(orderPartSelect.value);
+
+            // If the line was fully clear (balance 0), this order starts a new "all orders" batch
+            if (totalSubmitted - totalDelivered === 0) {
+                firstSubmitSimTime = simClock;
+            }
+
+            orderQueue.push({
+                id: orderCounter++,
+                customerIdx: c,
+                partIdx: p,
+                color: customerMappings[c][p],
+                currentWC: -1,
+                progress: 0,
+                state: 'queued',
+                el: null,
+                submitTime: simClock
+            });
+            totalSubmitted++;
+            customerStats[c].submitted++;
+            updateKpis();
+            updateQueueUI();
+        });
+
+        function updateQueueUI() {
+            queueListEl.innerHTML = '';
+            if (orderQueue.length === 0) {
+                queueListEl.innerHTML = '<span style="font-size:0.75rem; color: var(--text-muted);">No pending orders.</span>';
+                return;
+            }
+            orderQueue.forEach(ord => {
+                const item = document.createElement('div');
+                item.className = 'queue-item';
+                item.innerHTML = `
+                    <div class="badge-dot" style="background: ${ord.color === 'Green' ? 'var(--green-part)' : 'var(--red-part)'}"></div>
+                    Ord #${ord.id} (C${ord.customerIdx + 1}-P${ord.partIdx + 1})
+                `;
+                queueListEl.appendChild(item);
+            });
+        }
+
+        let lastTimestamp = null;
+        let kpiRefreshAccumulator = 0;
+        function animate(timestamp) {
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const deltaSeconds = ((timestamp - lastTimestamp) / 1000) * simSpeed;
+            lastTimestamp = timestamp;
+
+            if (isRunning) {
+                simClock += deltaSeconds;
+                processQueueToLine();
+                updateLineOrders(deltaSeconds);
+                kpiRefreshAccumulator += deltaSeconds;
+                if (kpiRefreshAccumulator >= 0.25) {
+                    kpiRefreshAccumulator = 0;
+                    updateKpis();
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        function processQueueToLine() {
+            if (orderQueue.length === 0) return;
+
+            for (let i = 0; i < orderQueue.length; i++) {
+                const ord = orderQueue[i];
+                if (!activeCustomerOrders[ord.customerIdx] && wcOccupancy[0] === null) {
+                    activeCustomerOrders[ord.customerIdx] = true;
+                    renderMappingTable();
+
+                    orderQueue.splice(i, 1);
+                    updateQueueUI();
+
+                    ord.currentWC = 0;
+                    ord.state = 'processing';
+                    ord.progress = 0;
+                    wcOccupancy[0] = ord;
+
+                    const blockEl = document.createElement('div');
+                    blockEl.className = `block-unit ${ord.color}`;
+                    blockEl.id = `block-${ord.id}`;
+                    blockEl.innerText = `C${ord.customerIdx + 1}`;
+                    pipelineEl.appendChild(blockEl);
+                    ord.el = blockEl;
+
+                    positionBlockAtWC(ord, 0);
+                    break; 
+                }
+            }
+        }
+
+        function positionBlockAtWC(ord, wcIndex) {
+            const slotEl = document.getElementById(`wc-slot-${wcIndex}`);
+            const slotRect = slotEl.getBoundingClientRect();
+            const pipeRect = pipelineEl.getBoundingClientRect();
+            ord.el.style.left = `${(slotRect.left + slotRect.width / 2) - pipeRect.left - 14}px`;
+            ord.el.style.top = `${(slotRect.top + slotRect.height / 2) - pipeRect.top - 14}px`;
+        }
+
+        function updateLineOrders(delta) {
+            for (let w = numWorkcenters - 1; w >= 0; w--) {
+                const ord = wcOccupancy[w];
+                if (!ord) continue;
+
+                const statusEl = document.getElementById(`wc-status-${w}`);
+                const wcTime = getWcTotalLeadTime(w);
+
+                if (ord.state === 'processing') {
+                    const effectiveTime = wcTime > 0 ? wcTime : 1;
+                    ord.progress += delta / effectiveTime;
+                    if (statusEl) {
+                        statusEl.innerText = `Work: ${Math.min(100, Math.floor(ord.progress * 100))}%`;
+                        statusEl.style.color = 'var(--accent-cycle)';
+                    }
+                    if (ord.progress >= 1) {
+                        ord.progress = 0;
+                        ord.state = 'done_processing';
+                    }
+                }
+
+                if (ord.state === 'done_processing') {
+                    const nextWC = w + 1;
+                    if (nextWC >= numWorkcenters) {
+                        ord.state = 'delivered';
+                        wcOccupancy[w] = null;
+                        if (statusEl) {
+                            statusEl.innerText = 'Ready';
+                            statusEl.style.color = 'var(--text-muted)';
+                        }
+                        ord.el.style.left = `${pipelineEl.clientWidth + 20}px`;
+                        setTimeout(() => ord.el.remove(), 400);
+
+                        activeCustomerOrders[ord.customerIdx] = false;
+                        totalDelivered++;
+
+                        const completionTime = simClock - (ord.submitTime || simClock);
+                        customerStats[ord.customerIdx].delivered++;
+                        customerStats[ord.customerIdx].times.push(completionTime);
+                        allCompletionTimes.push(completionTime);
+
+                        // If this cleared the entire batch, record the total time for all orders
+                        if (totalDelivered === totalSubmitted && firstSubmitSimTime !== null) {
+                            allOrdersMakespan = simClock - firstSubmitSimTime;
+                        }
+
+                        updateKpis();
+                        renderMappingTable();
+                    } else {
+                        if (wcOccupancy[nextWC] === null) {
+                            wcOccupancy[w] = null;
+                            if (statusEl) {
+                                statusEl.innerText = 'Ready';
+                                statusEl.style.color = 'var(--text-muted)';
+                            }
+                            ord.currentWC = nextWC;
+                            ord.state = 'processing';
+                            ord.progress = 0;
+                            ord.el.classList.remove('blocked');
+                            wcOccupancy[nextWC] = ord;
+                            positionBlockAtWC(ord, nextWC);
+                        } else {
+                            ord.el.classList.add('blocked');
+                            if (statusEl) {
+                                statusEl.innerText = 'BLOCKED';
+                                statusEl.style.color = 'var(--accent-wait)';
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        document.getElementById('takt-input').addEventListener('change', () => {
+            recalculateMetrics();
+            updateKpis();
+        });
+        document.getElementById('speed-input').addEventListener('change', (e) => simSpeed = parseFloat(e.target.value) || 1);
+        document.getElementById('btn-toggle').addEventListener('click', (e) => {
+            isRunning = !isRunning;
+            e.target.innerText = isRunning ? 'Pause' : 'Resume';
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            wcOccupancy.forEach(ord => { if (ord && ord.el) ord.el.remove(); });
+            wcOccupancy.fill(null);
+            orderQueue = [];
+            activeCustomerOrders.fill(false);
+            totalSubmitted = 0;
+            totalDelivered = 0;
+
+            simClock = 0;
+            firstSubmitSimTime = null;
+            allOrdersMakespan = 0;
+            allCompletionTimes = [];
+            customerStats = Array.from({ length: numCustomers }, () => ({ submitted: 0, delivered: 0, times: [] }));
+
+            updateKpis();
+            for (let i = 0; i < numWorkcenters; i++) {
+                const statusEl = document.getElementById(`wc-status-${i}`);
+                if (statusEl) {
+                    statusEl.innerText = 'Ready';
+                    statusEl.style.color = 'var(--text-muted)';
+                }
+            }
+            renderMappingTable();
+            updateQueueUI();
+        });
+
+        // --- Throughput Optimizer ---
+        // Headless (non-visual, non-realtime) copy of the pipeline mechanics, used to
+        // fast-forward through many minutes of simulated time for different customer
+        // order combinations, using the *actual* workcenter time entries above.
+        function simulateStrategy(customerSequence, simDurationSeconds) {
+            const dt = 0.25;
+            const wcTimes = wcData.map((_, i) => getWcTotalLeadTime(i) || 1);
+            const occ = Array(numWorkcenters).fill(null);
+            const activeCust = Array(numCustomers).fill(false);
+            const queue = customerSequence.map(c => ({ customerIdx: c }));
+            let qi = 0;
+            let delivered = 0;
+            let t = 0;
+
+            while (t < simDurationSeconds) {
+                // Admit next queued order into WC0 if that customer isn't already in-flight
+                for (let i = qi; i < queue.length; i++) {
+                    const o = queue[i];
+                    if (o.used) continue;
+                    if (!activeCust[o.customerIdx] && occ[0] === null) {
+                        activeCust[o.customerIdx] = true;
+                        occ[0] = { customerIdx: o.customerIdx, progress: 0 };
+                        o.used = true;
+                        break;
+                    }
+                }
+                // Advance stations back-to-front (mirrors updateLineOrders)
+                for (let w = numWorkcenters - 1; w >= 0; w--) {
+                    const o = occ[w];
+                    if (!o) continue;
+                    if (o.progress < 1) o.progress += dt / wcTimes[w];
+                    if (o.progress >= 1) {
+                        const next = w + 1;
+                        if (next >= numWorkcenters) {
+                            delivered++;
+                            activeCust[o.customerIdx] = false;
+                            occ[w] = null;
+                        } else if (occ[next] === null) {
+                            occ[next] = { customerIdx: o.customerIdx, progress: 0 };
+                            occ[w] = null;
+                        }
+                        // else: blocked, stays put until downstream frees up
+                    }
+                }
+                t += dt;
+            }
+            return delivered;
+        }
+
+        function buildSequence(pattern, length) {
+            const seq = [];
+            for (let i = 0; i < length; i++) seq.push(pattern[i % pattern.length]);
+            return seq;
+        }
+
+        // Safety net: pull whatever is currently sitting in the input fields into wcData
+        // before analyzing, in case any edit hasn't been committed via the input listener yet.
+        function syncWcDataFromDom() {
+            document.querySelectorAll('.wc-field-input').forEach(inp => {
+                const idx = parseInt(inp.dataset.idx);
+                const field = inp.dataset.field;
+                const val = Math.max(0, parseFloat(inp.value) || 0);
+                if (wcData[idx]) wcData[idx][field] = val;
+            });
+        }
+
+        function analyzeThroughput() {
+            syncWcDataFromDom();
+            recalculateMetrics();
+
+            const wcTimes = wcData.map((_, i) => getWcTotalLeadTime(i));
+            let bottleneckIdx = 0;
+            for (let i = 1; i < numWorkcenters; i++) if (wcTimes[i] > wcTimes[bottleneckIdx]) bottleneckIdx = i;
+            const bottleneckTime = wcTimes[bottleneckIdx];
+            const totalFlowTime = wcTimes.reduce((a, b) => a + b, 0);
+
+            const bottleneckThroughputPerMin = 60 / bottleneckTime;
+            const wipThroughputPerMin = (60 * numCustomers) / totalFlowTime;
+            const theoreticalMaxPerMin = Math.min(bottleneckThroughputPerMin, wipThroughputPerMin);
+            const limitedBy = bottleneckThroughputPerMin <= wipThroughputPerMin ? 'bottleneck' : 'concurrency';
+
+            // Simulate a handful of concrete order combinations against the real times
+            const SIM_SECONDS = 1800; // 30 simulated minutes
+            const roundRobinSeq = buildSequence(Array.from({ length: numCustomers }, (_, i) => i), 400);
+            const singleCustSeq = buildSequence([0], 400);
+            const batchSeq = buildSequence(
+                Array.from({ length: numCustomers }, (_, i) => i).flatMap(c => Array(5).fill(c)),
+                400
+            );
+            const pairAlternateSeq = buildSequence([0, 1], 400);
+
+            const strategies = [
+                { name: 'Round Robin (all 5 customers)', seq: roundRobinSeq },
+                { name: 'Single Customer Repeat (C1 only)', seq: singleCustSeq },
+                { name: 'Batches of 5 per Customer', seq: batchSeq },
+                { name: 'Alternate 2 Customers (C1/C2)', seq: pairAlternateSeq }
+            ];
+
+            const results = strategies.map(s => {
+                const delivered = simulateStrategy(s.seq, SIM_SECONDS);
+                const perMin = delivered / (SIM_SECONDS / 60);
+                return { name: s.name, delivered, perMin };
+            });
+
+            let best = results[0];
+            results.forEach(r => { if (r.perMin > best.perMin) best = r; });
+
+            renderThroughputResults(results, best, {
+                bottleneckIdx, bottleneckTime, totalFlowTime,
+                bottleneckThroughputPerMin, wipThroughputPerMin, theoreticalMaxPerMin, limitedBy,
+                wcTimes
+            });
+        }
+
+        function renderThroughputResults(results, best, analysis) {
+            const summaryEl = document.getElementById('throughput-summary');
+            const tableEl = document.getElementById('throughput-results-table');
+            const bodyEl = document.getElementById('throughput-results-body');
+
+            const limitText = analysis.limitedBy === 'bottleneck'
+                ? `The line is <b>bottleneck-bound</b> by <span class="bottleneck-tag">${wcNames[analysis.bottleneckIdx]}</span> (${analysis.bottleneckTime}s/unit). The customer combination barely matters once the queue keeps that station fed — but round-robin across customers is still needed to avoid starving it.`
+                : `The line is <b>concurrency-bound</b>: only ${numCustomers} customers can be in-flight at once (one order per customer), so the line can't reach its ${analysis.bottleneckThroughputPerMin.toFixed(2)} orders/min station limit. Cycling orders across all ${numCustomers} customers is what unlocks the extra throughput.`;
+
+            const breakdown = analysis.wcTimes
+                .map((t, i) => `${wcNames[i]}: ${t.toFixed(1)}s${i === analysis.bottleneckIdx ? ' ⬅ bottleneck' : ''}`)
+                .join(' &nbsp;|&nbsp; ');
+
+            summaryEl.innerHTML = `
+                <span style="font-size:0.7rem; color: var(--text-muted);">Analyzed just now, using the current cycle+queue time (VA+NVA+BVA+Wait+Transport+Queue) of every workcenter below:</span><br>
+                <span style="font-size:0.72rem;">${breakdown}</span><br><br>
+                Bottleneck workcenter: <span class="bottleneck-tag">${wcNames[analysis.bottleneckIdx]}</span> at ${analysis.bottleneckTime.toFixed(1)}s/unit.
+                Full single-order flow time through the line: <b>${analysis.totalFlowTime.toFixed(1)}s</b>.<br>
+                Station-limited throughput ceiling: <b>${analysis.bottleneckThroughputPerMin.toFixed(2)} orders/min</b> &nbsp;|&nbsp;
+                Customer-concurrency-limited throughput (Little's Law, WIP=${numCustomers}): <b>${analysis.wipThroughputPerMin.toFixed(2)} orders/min</b><br>
+                Theoretical max achievable: <b>${analysis.theoreticalMaxPerMin.toFixed(2)} orders/min</b> (~${(analysis.theoreticalMaxPerMin * 60).toFixed(0)} orders/hr).<br><br>
+                ${limitText}<br><br>
+                Best simulated combination: <b>${best.name}</b> at <b>${best.perMin.toFixed(2)} orders/min</b>. Note: which <em>part number</em> is ordered has no effect on throughput in this model — only which <em>customers</em> are cycled matters, since only customer identity locks concurrency.
+                ${analysis.limitedBy === 'bottleneck' ? '<br><br><span style="font-size:0.75rem; color: var(--text-muted);">Tip: changing a workcenter that is <em>not</em> the bottleneck above will not move these numbers — that\'s expected, since the slowest station sets the ceiling for the whole line. Change the bottleneck station\'s time to see the numbers shift.</span>' : ''}
+            `;
+
+            bodyEl.innerHTML = '';
+            results.forEach(r => {
+                const tr = document.createElement('tr');
+                if (r.name === best.name) tr.classList.add('best-strategy-row');
+                tr.innerHTML = `
+                    <td>${r.name}${r.name === best.name ? ' ★' : ''}</td>
+                    <td>${r.delivered}</td>
+                    <td>${r.perMin.toFixed(2)}</td>
+                    <td>${(r.perMin * 60).toFixed(0)}</td>
+                `;
+                bodyEl.appendChild(tr);
+            });
+            tableEl.style.display = '';
+        }
+
+        document.getElementById('btn-analyze-throughput').addEventListener('click', (e) => {
+            e.target.disabled = true;
+            e.target.innerText = 'Analyzing...';
+            setTimeout(() => {
+                analyzeThroughput();
+                e.target.disabled = false;
+                e.target.innerText = 'Analyze Optimal Combination';
+            }, 20);
+        });
+
+        renderMappingTable();
+        renderDropdowns();
+        renderWorkcentersUI();
+        renderChartUI();
+        updateKpis();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
