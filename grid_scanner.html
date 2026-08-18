@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANN Grid Scanner & Color Lookup</title>
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 { margin-top: 0; color: #333; font-size: 1.6em; }
+        p.subtitle { color: #666; margin-bottom: 20px; font-size: 0.9em; }
+
+        /* Mode Toggle Tabs */
+        .tab-group {
+            display: flex;
+            background-color: #e9ecef;
+            border-radius: 8px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            font-weight: 600;
+            border: none;
+            background: transparent;
+            color: #495057;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background-color: #ffffff;
+            color: #007bff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        /* Sections */
+        .mode-section { display: none; }
+        .mode-section.active { display: block; }
+
+        /* Camera Elements */
+        #camera-wrapper {
+            position: relative;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: #000;
+            margin-bottom: 20px;
+            aspect-ratio: 4 / 3; 
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #scanner-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 40px;
+            border: 3px solid #007bff;
+            border-radius: 6px;
+            box-shadow: 0 0 15px rgba(0, 123, 255, 0.6);
+            pointer-events: none;
+            display: none;
+        }
+
+        /* Manual Input Elements */
+        .manual-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .manual-group label {
+            display: block;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        .manual-group input {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.2em;
+            font-weight: 600;
+            border: 2px solid #ced4da;
+            border-radius: 8px;
+            box-sizing: border-box;
+            text-transform: uppercase;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .manual-group input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        /* Button Styling */
+        #controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button.action-btn {
+            padding: 12px 20px;
+            font-size: 0.95em;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-primary:hover { background-color: #0056b3; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-success:hover { background-color: #1e7e34; }
+
+        /* Status & Results */
+        #ocr-output-panel {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            min-height: 80px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .status-header { font-size: 0.8em; color: #777; margin-bottom: 4px; }
+        #recognized-text { font-family: 'Courier New', Courier, monospace; font-size: 1.1em; font-weight: 600; color: #444; }
+        #clean-coordinate { font-size: 1.1em; color: #007bff; font-weight: 600; }
+
+        #final-result {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100px;
+            margin-top: 10px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1.4em;
+            font-weight: 700;
+            color: #fff;
+            transition: background-color 0.3s;
+            display: none;
+        }
+
+        #final-result.state-red { background-color: #dc3545; }
+        #final-result.state-green { background-color: #28a745; }
+        #final-result.state-error { background-color: #ffc107; color: #333; }
+
+        #loader { display: none; color: #555; margin-bottom: 15px; }
+        .result-label { font-size: 0.7em; opacity: 0.8; }
+        #processing-canvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Grid Color Finder</h1>
+    <p class="subtitle">Scan via camera or type coordinate manually.</p>
+
+    <!-- Mode Toggle Tabs -->
+    <div class="tab-group">
+        <button id="tab-camera" class="tab-btn active" onclick="switchMode('camera')">📷 Camera Scan</button>
+        <button id="tab-manual" class="tab-btn" onclick="switchMode('manual')">⌨️ Manual Input</button>
+    </div>
+
+    <!-- Mode 1: Camera Scanner -->
+    <div id="camera-section" class="mode-section active">
+        <div id="camera-wrapper">
+            <video id="video" autoplay playsinline muted></video>
+            <div id="scanner-overlay"></div>
+        </div>
+
+        <div id="controls">
+            <button id="start-btn" class="action-btn btn-primary">Start Camera</button>
+            <button id="scan-btn" class="action-btn btn-success" disabled>Capture & Scan</button>
+        </div>
+    </div>
+
+    <!-- Mode 2: Manual Text Input -->
+    <div id="manual-section" class="mode-section">
+        <div class="manual-group">
+            <label for="manual-input">Enter Coordinate (e.g. A1, T29, U42):</label>
+            <input type="text" id="manual-input" placeholder="e.g. H35" maxlength="4" oninput="handleManualInput()">
+        </div>
+    </div>
+
+    <canvas id="processing-canvas"></canvas>
+    <div id="loader">Initializing OCR library...</div>
+
+    <!-- Status & Information Panel -->
+    <div id="ocr-output-panel">
+        <div id="raw-ocr-header" class="status-header">RAW OCR OUTPUT:</div>
+        <div id="recognized-text">---</div>
+        
+        <div class="status-header" style="margin-top: 10px;">PARSED COORDINATE:</div>
+        <div id="clean-coordinate">Waiting...</div>
+    </div>
+
+    <!-- Final Color Result -->
+    <div id="final-result">
+        <div id="result-text">MATCH FOUND!</div>
+        <div class="result-label" id="result-label"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
+
+<script>
+    const columns = "ABCDEFGHIJKLMNOPQRSTU";
+    
+    const gridColorMap = {
+        1:  "RRRRRRRGRRRRGRRGRRRRR",
+        2:  "RRGRRRRGRRRRGGGRGGRGR",
+        3:  "RRGRRRRGRRRRGGGRGRRGR",
+        4:  "RRRRRRRGRRRRGGGRRRRRR",
+        5:  "GRGRRGGGRGRRGGGRRRRRG",
+        6:  "RRGRRRGGGGGRGGGRGRRGG",
+        7:  "RRGRRRGGGRRRGGGRGRRGG",
+        8:  "RGGRGGGGGRRRGGGGGRRGG",
+        9:  "RGGRGGGGGRRRGGGGGRGGG",
+        10: "GGGRGGGGGGGRGGGGGRGGG",
+        11: "GRGRGGGGGRRRGGGRGRRGG",
+        12: "GGGRGGGGGRRRGGGRGRRGG",
+        13: "RRGRRRGGGRRRRGGGRRRGG",
+        14: "RRGRRRGGGRRRRGGGRRRGG",
+        15: "RRGRRGGGGRRRRGGGRRRRR",
+        16: "RRGRRGGGGGRRRGGGRRRRR",
+        17: "GRGRRGGGGGRRRGGGRRRRR",
+        18: "RRRRRRGGGRRRRGGGRRRRR",
+        19: "RRRRGGGGGRRRRGGGRGGGR",
+        20: "RRRGRGGGGGGGGRGGRRRRR",
+        21: "RRRRRRRRRRRRRGGGRRRRR",
+        22: "RRGGRGGGGGGGGGGGRGGGG",
+        23: "RRGRGGGGGGGGGGGGRGGGG",
+        24: "RRGRRGGGGGGGGGGGGRGGG",
+        25: "GGGGGGGGGGGGGGGGGGGGG",
+        26: "GGGGGGGGGGGGGGGGGGGGG",
+        27: "GGGGGGGGGGGGGGGGGGGGG",
+        28: "GGGGGGGGGGGGGGGGGGGGG",
+        29: "GGGGRGGGGGGGGGGGGGGGG",
+        30: "GGGGRGGGGGGGGGGGGGGGG",
+        31: "GGGGRGGGGGGGGGGGGGGGG",
+        32: "RRRGRGGGGGGGGGGGGGGGG",
+        33: "RRRGRGGGGGGGGGGGGGGGG",
+        34: "RRGRRGGGGGGGGGGGRRRRR",
+        35: "RRGRRGGGGGGGGGGGRRRRR",
+        36: "RRRRRGGGGGGGGGGGRRRRR",
+        37: "RRGRRGGGGGGGGGGGRRRRR",
+        38: "GGGGGGGGGGGGGGGGGGGGG",
+        39: "RRRRRGGGGGGGGGGGRRRRR",
+        40: "RRGRRGGGGGGGGGGGRRRRR",
+        41: "RRGGGGGGGGGGGGGGGRRRR",
+        42: "GGGGGGGGGGGGGGGGGGGGG"
+    };
+
+    // Elements
+    const startBtn = document.getElementById('start-btn');
+    const scanBtn = document.getElementById('scan-btn');
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('scanner-overlay');
+    const canvas = document.getElementById('processing-canvas');
+    const ctx = canvas.getContext('2d');
+    const loader = document.getElementById('loader');
+    
+    const ocrTextOut = document.getElementById('recognized-text');
+    const cleanCoordsOut = document.getElementById('clean-coordinate');
+    const rawOcrHeader = document.getElementById('raw-ocr-header');
+    
+    const finalResultDiv = document.getElementById('final-result');
+    const resultTextOut = document.getElementById('result-text');
+    const resultLabelOut = document.getElementById('result-label');
+
+    let stream = null;
+    let scheduler = null;
+    let currentMode = 'camera';
+
+    // Switch between Camera and Manual Tabs
+    function switchMode(mode) {
+        currentMode = mode;
+        resetDisplay();
+
+        document.getElementById('tab-camera').classList.toggle('active', mode === 'camera');
+        document.getElementById('tab-manual').classList.toggle('active', mode === 'manual');
+        
+        document.getElementById('camera-section').classList.toggle('active', mode === 'camera');
+        document.getElementById('manual-section').classList.toggle('active', mode === 'manual');
+
+        if (mode === 'manual') {
+            rawOcrHeader.style.display = 'none';
+            ocrTextOut.style.display = 'none';
+            document.getElementById('manual-input').focus();
+        } else {
+            rawOcrHeader.style.display = 'block';
+            ocrTextOut.style.display = 'block';
+        }
+    }
+
+    async function initOCR() {
+        if(scheduler) return;
+
+        try {
+            loader.style.display = 'block';
+            startBtn.disabled = true;
+
+            scheduler = Tesseract.createScheduler();
+            const worker = await Tesseract.createWorker('eng', 1, {
+                logger: m => console.log(m)
+            });
+            scheduler.addWorker(worker);
+
+            loader.style.display = 'none';
+            startBtn.disabled = false;
+
+        } catch (err) {
+            console.error("Failed to initialize OCR:", err);
+            loader.innerHTML = "OCR failed to load. Use Manual Input mode.";
+            loader.style.color = "red";
+        }
+    }
+
+    initOCR();
+
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            video.srcObject = stream;
+            video.play();
+            
+            overlay.style.display = 'block';
+            scanBtn.disabled = false;
+            startBtn.disabled = true;
+
+        } catch (err) {
+            console.error("Camera error:", err);
+            cleanCoordsOut.innerHTML = "<span style='color:red'>Camera unavailable.</span> Switched to manual mode.";
+            switchMode('manual');
+        }
+    }
+
+    startBtn.addEventListener('click', startCamera);
+
+    async function performScan() {
+        if (!scheduler || !stream) return;
+
+        scanBtn.innerHTML = "Scanning...";
+        scanBtn.disabled = true;
+        resetDisplay();
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const videoRect = video.getBoundingClientRect();
+        const overlayRect = overlay.getBoundingClientRect();
+
+        const scaleX = canvas.width / videoRect.width;
+        const scaleY = canvas.height / videoRect.height;
+
+        const cropX = (overlayRect.left - videoRect.left) * scaleX;
+        const cropY = (overlayRect.top - videoRect.top) * scaleY;
+        const cropW = overlayRect.width * scaleX;
+        const cropH = overlayRect.height * scaleY;
+
+        if (cropW <= 0 || cropH <= 0 || cropX < 0 || cropY < 0) {
+            cleanCoordsOut.innerHTML = "Error defining scan area.";
+            finishScan();
+            return;
+        }
+
+        const imageData = ctx.getImageData(cropX, cropY, cropW, cropH);
+
+        try {
+            const { data: { text } } = await scheduler.addJob('recognize', imageData, {
+                tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTU0123456789-"
+            });
+
+            handleOCRResults(text);
+
+        } catch (err) {
+            console.error("OCR Error:", err);
+            ocrTextOut.innerHTML = "<span style='color:red'>Error running scan.</span>";
+        }
+
+        finishScan();
+    }
+
+    scanBtn.addEventListener('click', performScan);
+
+    function handleManualInput() {
+        const inputVal = document.getElementById('manual-input').value.trim();
+        if (!inputVal) {
+            resetDisplay();
+            return;
+        }
+        processCoordinateString(inputVal);
+    }
+
+    function handleOCRResults(rawText) {
+        const cleanRaw = rawText.trim() || "(No Text Detected)";
+        ocrTextOut.textContent = cleanRaw;
+        processCoordinateString(cleanRaw);
+    }
+
+    function processCoordinateString(rawText) {
+        let cleaned = rawText.toUpperCase().replace(/[^A-U0-9-]/g, '');
+        const pattern = /^([A-U])(?:-?)(\d{1,2})$/;
+        const match = cleaned.match(pattern);
+
+        if (match) {
+            const letter = match[1];
+            const numStr = match[2];
+            const rowNum = parseInt(numStr, 10);
+            const cleanString = `${letter}${numStr}`;
+
+            cleanCoordsOut.innerHTML = `Valid Coordinate: <strong>${cleanString}</strong>`;
+            applyGridLookup(letter, rowNum, cleanString);
+        } else {
+            cleanCoordsOut.innerHTML = "<span style='color:orange'>Invalid Coordinate (Format: A1 to U42)</span>";
+            finalResultDiv.style.display = 'none';
+        }
+    }
+
+    function applyGridLookup(letter, row, coordString) {
+        const colIndex = columns.indexOf(letter);
+        const rowData = gridColorMap[row];
+
+        if (rowData && rowData[colIndex]) {
+            const colorCode = rowData[colIndex];
+
+            finalResultDiv.style.display = 'flex';
+            if (colorCode === 'R') {
+                finalResultDiv.className = 'state-red';
+                resultTextOut.textContent = "RED";
+            } else if (colorCode === 'G') {
+                finalResultDiv.className = 'state-green';
+                resultTextOut.textContent = "GREEN";
+            }
+            resultLabelOut.textContent = `Coordinate: ${coordString}`;
+
+        } else {
+            finalResultDiv.style.display = 'flex';
+            finalResultDiv.className = 'state-error';
+            resultTextOut.textContent = "OUT OF RANGE";
+            resultLabelOut.textContent = `Valid ${coordString}, but out of row 1-42 bounds.`;
+        }
+    }
+
+    function resetDisplay() {
+        ocrTextOut.textContent = "...";
+        cleanCoordsOut.textContent = "Waiting for input...";
+        finalResultDiv.style.display = 'none';
+        finalResultDiv.className = '';
+    }
+
+    function finishScan() {
+        scanBtn.innerHTML = "Capture & Scan";
+        scanBtn.disabled = false;
+    }
+</script>
+
+</body>
+</html>

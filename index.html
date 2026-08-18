@@ -1,383 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ANN Grid Scanner & Color Lookup</title>
-    <!-- Google Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
-    
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOE-SG / Ci — Tool Index</title>
+<style>
+    :root {
+        --bg-color: #0f172a;
+        --card-bg: #1e293b;
+        --card-bg-hover: #243046;
+        --border-color: #334155;
+        --text-light: #f8fafc;
+        --text-muted: #94a3b8;
+        --accent-cyan: #22d3ee;
+        --accent-pink: #ec4899;
+        --accent-lead: #10b981;
+    }
 
-        .container {
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            max-width: 480px;
-            width: 100%;
-            text-align: center;
-        }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        h1 { margin-top: 0; color: #333; font-size: 1.6em; }
-        p.subtitle { color: #666; margin-bottom: 20px; font-size: 0.9em; }
+    body {
+        background-color: var(--bg-color);
+        background-image:
+            radial-gradient(circle at 15% 10%, rgba(34, 211, 238, 0.07), transparent 40%),
+            radial-gradient(circle at 85% 90%, rgba(236, 72, 153, 0.06), transparent 45%);
+        color: var(--text-light);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        min-height: 100vh;
+        padding: 40px 20px 60px;
+    }
 
-        #camera-wrapper {
-            position: relative;
-            width: 100%;
-            border-radius: 12px;
-            overflow: hidden;
-            background-color: #000;
-            margin-bottom: 20px;
-            aspect-ratio: 4 / 3; 
-        }
+    .wrap { max-width: 900px; margin: 0 auto; }
 
-        #video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+    .eyebrow {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 2.5px;
+        color: var(--accent-cyan);
+        font-weight: 700;
+        font-family: 'Consolas', 'Courier New', monospace;
+        margin-bottom: 10px;
+    }
 
-        #scanner-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 70%;
-            height: 40px;
-            border: 3px solid #007bff;
-            border-radius: 6px;
-            box-shadow: 0 0 15px rgba(0, 123, 255, 0.6);
-            pointer-events: none;
-            display: none;
-        }
+    h1 {
+        font-size: 2.1rem;
+        letter-spacing: -0.5px;
+        margin-bottom: 8px;
+    }
 
-        #controls {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+    .subtitle {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        max-width: 560px;
+        line-height: 1.6;
+        margin-bottom: 40px;
+    }
 
-        button {
-            padding: 12px 20px;
-            font-size: 0.95em;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
+    .tool-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+    }
+    @media (max-width: 720px) {
+        .tool-grid { grid-template-columns: 1fr; }
+    }
 
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .tool-card {
+        display: block;
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 24px;
+        text-decoration: none;
+        color: inherit;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+    }
 
-        .btn-primary { background-color: #007bff; color: white; }
-        .btn-primary:hover { background-color: #0056b3; }
-        .btn-success { background-color: #28a745; color: white; }
-        .btn-success:hover { background-color: #1e7e34; }
+    .tool-card::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: var(--accent);
+        opacity: 0.9;
+    }
 
-        #ocr-output-panel {
-            background-color: #f8f9fa;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            padding: 15px;
-            min-height: 120px;
-            margin-bottom: 20px;
-            text-align: left;
-        }
+    .tool-card:hover {
+        transform: translateY(-3px);
+        border-color: var(--accent);
+        background-color: var(--card-bg-hover);
+    }
 
-        .status-header { font-size: 0.8em; color: #777; margin-bottom: 8px; }
-        #recognized-text { font-family: 'Courier New', Courier, monospace; font-size: 1.1em; font-weight: 600; color: #444; }
-        #clean-coordinate { font-size: 1.2em; color: #007bff; font-weight: 600; }
+    .tool-card.viz { --accent: var(--accent-cyan); }
+    .tool-card.scan { --accent: var(--accent-pink); }
 
-        #final-result {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100px;
-            margin-top: 10px;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 1.4em;
-            font-weight: 700;
-            color: #fff;
-            transition: background-color 0.3s;
-            display: none;
-        }
+    .tool-tag {
+        display: inline-block;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 700;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 20px;
+        padding: 3px 10px;
+        margin-bottom: 14px;
+    }
 
-        #final-result.state-red { background-color: #dc3545; }
-        #final-result.state-green { background-color: #28a745; }
-        #final-result.state-error { background-color: #ffc107; color: #333; }
+    .tool-card h2 {
+        font-size: 1.15rem;
+        margin-bottom: 8px;
+        letter-spacing: -0.2px;
+    }
 
-        #loader { display: none; color: #555; }
-        .result-label { font-size: 0.7em; opacity: 0.8; }
-        #processing-canvas { display: none; }
-    </style>
+    .tool-card p {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        line-height: 1.55;
+        margin-bottom: 18px;
+    }
+
+    .tool-open {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .tool-open .arrow {
+        transition: transform 0.15s ease;
+    }
+    .tool-card:hover .tool-open .arrow {
+        transform: translateX(4px);
+    }
+
+    footer {
+        margin-top: 48px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    footer a { color: var(--text-muted); }
+    footer a:hover { color: var(--accent-cyan); }
+</style>
 </head>
 <body>
+    <div class="wrap">
+        <div class="eyebrow">MOE-SG / Ci</div>
+        <h1>Engineering Tool Index</h1>
+        <p class="subtitle">
+            Self-contained, browser-based utilities — no install, no backend. Open a tool below;
+            each one runs entirely on this page load.
+        </p>
 
-<div class="container">
-    <h1>Grid Scanner (Tesseract OCR)</h1>
-    <p class="subtitle">Align the [Letter-Number] coordinate within the blue box.</p>
+        <div class="tool-grid">
+            <a class="tool-card viz" href="manufacturing_visualizer.html">
+                <div class="tool-tag">Simulation · VSM</div>
+                <h2>Manufacturing Line Visualizer</h2>
+                <p>
+                    Editable 7-workcenter pipeline with live order flow, per-customer order
+                    tracking, cycle/lead time and takt analysis, and a throughput optimizer that
+                    simulates order-combination strategies.
+                </p>
+                <div class="tool-open">Open tool <span class="arrow">&rarr;</span></div>
+            </a>
 
-    <div id="camera-wrapper">
-        <video id="video" autoplay playsinline muted></video>
-        <div id="scanner-overlay"></div>
+            <a class="tool-card scan" href="grid_scanner.html">
+                <div class="tool-tag">QC · Utility</div>
+                <h2>ANN Grid Scanner & Color Lookup</h2>
+                <p>
+                    Grid-based scanning and color lookup tool for reading and cross-referencing
+                    QC data directly in the browser.
+                </p>
+                <div class="tool-open">Open tool <span class="arrow">&rarr;</span></div>
+            </a>
+        </div>
+
+        <footer>
+            <span>Hosted from <a href="https://github.com/MOE-SG/Ci" target="_blank" rel="noopener">github.com/MOE-SG/Ci</a></span>
+            <span>All tools run client-side — no data leaves the browser</span>
+        </footer>
     </div>
-
-    <canvas id="processing-canvas"></canvas>
-
-    <div id="controls">
-        <button id="start-btn" class="btn-primary">Start Camera</button>
-        <button id="scan-btn" class="btn-success" disabled>Capture & Scan</button>
-    </div>
-
-    <div id="loader">Initializing OCR library...</div>
-
-    <div id="ocr-output-panel">
-        <div class="status-header">RAW OCR OUTPUT:</div>
-        <div id="recognized-text">---</div>
-        
-        <div class="status-header" style="margin-top: 15px;">CLEANED COORDINATE:</div>
-        <div id="clean-coordinate">Waiting...</div>
-    </div>
-
-    <div id="final-result">
-        <div id="result-text">MATCH FOUND!</div>
-        <div class="result-label" id="result-label"></div>
-    </div>
-</div>
-
-<script src="https://unpkg.com/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
-
-<script>
-    const columns = "ABCDEFGHIJKLMNOPQRSTU";
-    
-    // Corrected string quotes for rows 10 through 42
-    const gridColorMap = {
-        1:  "RRRRRRRGRRRRGRRGRRRRR",
-        2:  "RRGRRRRGRRRRGGGRGGRGR",
-        3:  "RRGRRRRGRRRRGGGRGRRGR",
-        4:  "RRRRRRRGRRRRGGGRRRRRR",
-        5:  "GRGRRGGGRGRRGGGRRRRRG",
-        6:  "RRGRRRGGGGGRGGGRGRRGG",
-        7:  "RRGRRRGGGRRRGGGRGRRGG",
-        8:  "RGGRGGGGGRRRGGGGGRRGG",
-        9:  "RGGRGGGGGRRRGGGGGRGGG",
-        10: "GGGRGGGGGGGRGGGGGRGGG",
-        11: "GRGRGGGGGRRRGGGRGRRGG",
-        12: "GGGRGGGGGRRRGGGRGRRGG",
-        13: "RRGRRRGGGRRRRGGGRRRGG",
-        14: "RRGRRRGGGRRRRGGGRRRGG",
-        15: "RRGRRGGGGRRRRGGGRRRRR",
-        16: "RRGRRGGGGGRRRGGGRRRRR",
-        17: "GRGRRGGGGGRRRGGGRRRRR",
-        18: "RRRRRRGGGRRRRGGGRRRRR",
-        19: "RRRRGGGGGRRRRGGGRGGGR",
-        20: "RRRGRGGGGGGGGRGGRRRRR",
-        21: "RRRRRRRRRRRRRGGGRRRRR",
-        22: "RRGGRGGGGGGGGGGGRGGGG",
-        23: "RRGRGGGGGGGGGGGGRGGGG",
-        24: "RRGRRGGGGGGGGGGGGRGGG",
-        25: "GGGGGGGGGGGGGGGGGGGGG",
-        26: "GGGGGGGGGGGGGGGGGGGGG",
-        27: "GGGGGGGGGGGGGGGGGGGGG",
-        28: "GGGGGGGGGGGGGGGGGGGGG",
-        29: "GGGGRGGGGGGGGGGGGGGGG",
-        30: "GGGGRGGGGGGGGGGGGGGGG",
-        31: "GGGGRGGGGGGGGGGGGGGGG",
-        32: "RRRGRGGGGGGGGGGGGGGGG",
-        33: "RRRGRGGGGGGGGGGGGGGGG",
-        34: "RRGRRGGGGGGGGGGGRRRRR",
-        35: "RRGRRGGGGGGGGGGGRRRRR",
-        36: "RRRRRGGGGGGGGGGGRRRRR",
-        37: "RRGRRGGGGGGGGGGGRRRRR",
-        38: "GGGGGGGGGGGGGGGGGGGGG",
-        39: "RRRRRGGGGGGGGGGGRRRRR",
-        40: "RRGRRGGGGGGGGGGGRRRRR",
-        41: "RRGGGGGGGGGGGGGGGRRRR",
-        42: "GGGGGGGGGGGGGGGGGGGGG"
-    };
-
-    const startBtn = document.getElementById('start-btn');
-    const scanBtn = document.getElementById('scan-btn');
-    const video = document.getElementById('video');
-    const overlay = document.getElementById('scanner-overlay');
-    const canvas = document.getElementById('processing-canvas');
-    const ctx = canvas.getContext('2d');
-    const loader = document.getElementById('loader');
-    
-    const ocrTextOut = document.getElementById('recognized-text');
-    const cleanCoordsOut = document.getElementById('clean-coordinate');
-    
-    const finalResultDiv = document.getElementById('final-result');
-    const resultTextOut = document.getElementById('result-text');
-    const resultLabelOut = document.getElementById('result-label');
-
-    let stream = null;
-    let scheduler = null;
-
-    async function initOCR() {
-        if(scheduler) return;
-
-        try {
-            loader.style.display = 'block';
-            startBtn.disabled = true;
-
-            scheduler = Tesseract.createScheduler();
-            const worker = await Tesseract.createWorker('eng', 1, {
-                logger: m => console.log(m)
-            });
-            scheduler.addWorker(worker);
-
-            loader.style.display = 'none';
-            startBtn.disabled = false;
-
-        } catch (err) {
-            console.error("Failed to initialize OCR:", err);
-            loader.innerHTML = "Error loading OCR. Ensure internet access.";
-            loader.style.color = "red";
-        }
-    }
-
-    initOCR();
-
-    async function startCamera() {
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            video.srcObject = stream;
-            video.play();
-            
-            overlay.style.display = 'block';
-            scanBtn.disabled = false;
-            startBtn.disabled = true;
-
-        } catch (err) {
-            console.error("Camera error:", err);
-            cleanCoordsOut.innerHTML = "<span style='color:red'>Camera Access Denied.</span> Must be served over HTTPS.";
-        }
-    }
-
-    startBtn.addEventListener('click', startCamera);
-
-    async function performScan() {
-        if (!scheduler || !stream) return;
-
-        scanBtn.innerHTML = "Scanning...";
-        scanBtn.disabled = true;
-        resetDisplay();
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const videoRect = video.getBoundingClientRect();
-        const overlayRect = overlay.getBoundingClientRect();
-
-        const scaleX = canvas.width / videoRect.width;
-        const scaleY = canvas.height / videoRect.height;
-
-        const cropX = (overlayRect.left - videoRect.left) * scaleX;
-        const cropY = (overlayRect.top - videoRect.top) * scaleY;
-        const cropW = overlayRect.width * scaleX;
-        const cropH = overlayRect.height * scaleY;
-
-        if (cropW <= 0 || cropH <= 0 || cropX < 0 || cropY < 0) {
-            cleanCoordsOut.innerHTML = "Error defining scan area.";
-            finishScan();
-            return;
-        }
-
-        const imageData = ctx.getImageData(cropX, cropY, cropW, cropH);
-
-        try {
-            const { data: { text } } = await scheduler.addJob('recognize', imageData, {
-                tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTU0123456789-"
-            });
-
-            handleOCRResults(text);
-
-        } catch (err) {
-            console.error("OCR Error:", err);
-            ocrTextOut.innerHTML = "<span style='color:red'>Error running scan.</span>";
-        }
-
-        finishScan();
-    }
-
-    scanBtn.addEventListener('click', performScan);
-
-    function handleOCRResults(rawText) {
-        const cleanRaw = rawText.trim() || "(No Text Detected)";
-        ocrTextOut.textContent = cleanRaw;
-
-        let cleaned = cleanRaw.toUpperCase().replace(/[^A-U0-9-]/g, '');
-
-        const pattern = /^([A-U])(?:-?)(\d{1,2})$/;
-        const match = cleaned.match(pattern);
-
-        if (match) {
-            const letter = match[1];
-            const numStr = match[2];
-            const rowNum = parseInt(numStr, 10);
-            const cleanString = `${letter}${numStr}`;
-
-            cleanCoordsOut.innerHTML = `Valid Pattern: ${cleanString}`;
-            applyGridLookup(letter, rowNum, cleanString);
-        } else {
-            cleanCoordsOut.innerHTML = "<span style='color:orange'>Invalid Coordinate Pattern.</span>";
-        }
-    }
-
-    function applyGridLookup(letter, row, coordString) {
-        const colIndex = columns.indexOf(letter);
-        const rowData = gridColorMap[row];
-
-        if (rowData && rowData[colIndex]) {
-            const colorCode = rowData[colIndex];
-
-            finalResultDiv.style.display = 'flex';
-            if (colorCode === 'R') {
-                finalResultDiv.className = 'state-red';
-                resultTextOut.textContent = "RED";
-            } else if (colorCode === 'G') {
-                finalResultDiv.className = 'state-green';
-                resultTextOut.textContent = "GREEN";
-            }
-            resultLabelOut.textContent = `Scanned Coordinate: ${coordString}`;
-
-        } else {
-            finalResultDiv.style.display = 'flex';
-            finalResultDiv.className = 'state-error';
-            resultTextOut.textContent = "OUT OF GRID";
-            resultLabelOut.textContent = `Valid ${coordString}, no mapping.`;
-        }
-    }
-
-    function resetDisplay() {
-        ocrTextOut.textContent = "...";
-        cleanCoordsOut.textContent = "Waiting for scan...";
-        finalResultDiv.style.display = 'none';
-        finalResultDiv.className = '';
-    }
-
-    function finishScan() {
-        scanBtn.innerHTML = "Capture & Scan";
-        scanBtn.disabled = false;
-    }
-</script>
-
 </body>
 </html>
