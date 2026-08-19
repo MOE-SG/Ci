@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5-Why + Root Cause Verification Simulator</title>
+<style>
+:root{
+ --bg:#f4f7fb;--card:#fff;--text:#172033;--muted:#687386;--line:#dce2ec;
+ --blue:#315efb;--blue2:#eef2ff;--green:#198754;--green2:#e7f7ef;
+ --yellow:#9a6500;--yellow2:#fff3dc;--red:#c92a3d;--red2:#fff0f2;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Segoe UI,Arial,sans-serif}
+header{background:#172033;color:#fff;padding:22px 28px} header h1{margin:0 0 5px;font-size:25px}
+header p{margin:0;color:#cbd3e1}.container{max-width:1250px;margin:22px auto;padding:0 18px}
+.toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px}
+button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}
+.primary{background:var(--blue);color:#fff}.secondary{background:#e7ebf2;color:#263247}
+.danger{background:var(--red2);color:var(--red)} .green{background:var(--green2);color:var(--green)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 2px 8px #1720330a}
+h2{font-size:19px;margin:0 0 5px} h3{font-size:15px;margin:0 0 10px}.hint{color:var(--muted);font-size:13px;margin:0 0 15px}
+label{display:block;color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px}
+textarea,input,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;color:var(--text);background:#fff}
+textarea{min-height:64px;resize:vertical} textarea:focus,input:focus,select:focus{outline:2px solid #b9c7ff;border-color:var(--blue)}
+.problem{background:#fff8e6;border:1px solid #f1d28a;border-radius:10px;padding:14px;margin-bottom:12px}
+.step{margin:15px 0;border:1px solid var(--line);border-radius:11px;background:#fff;overflow:hidden}
+.stephead{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f8faff;border-bottom:1px solid var(--line)}
+.num{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--blue2);color:var(--blue);font-weight:800}
+.stephead strong{font-size:15px}.score{margin-left:auto;font-size:12px;font-weight:800;padding:6px 9px;border-radius:15px}
+.score.green{background:var(--green2);color:var(--green)}.score.yellow{background:var(--yellow2);color:var(--yellow)}.score.red{background:var(--red2);color:var(--red)}
+.stepbody{padding:14px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.verify{margin-top:13px;border-top:1px solid var(--line);padding-top:12px}.check{display:flex;gap:8px;align-items:flex-start;margin:9px 0;font-size:13px}
+.check input{width:auto;margin-top:2px}.check b{font-weight:700}.help{font-size:11px;color:var(--muted);margin-left:23px}
+.verdict{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:700}.vgreen{background:var(--green2);color:var(--green)}
+.vyellow{background:var(--yellow2);color:var(--yellow)}.vred{background:var(--red2);color:var(--red)}
+.arrow{text-align:center;color:#9aa5b5;font-size:21px;margin:-5px 0}
+.summary{margin-top:18px;padding:15px;border:1px solid var(--line);border-radius:10px;background:#fafcff}
+.bigscore{font-size:28px;font-weight:800}.bar{height:10px;background:#e7ebf2;border-radius:10px;overflow:hidden;margin:8px 0 12px}.fill{height:100%;width:0;background:var(--blue);transition:.3s}
+.badges{display:flex;gap:8px;flex-wrap:wrap}.badge{padding:6px 9px;border-radius:15px;font-size:12px;font-weight:700;background:#edf1f5}
+.sidebox{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}.sidebox:first-child{border-top:0;padding-top:0;margin-top:0}
+.example{border:1px dashed #c9d2df;border-radius:8px;padding:10px;margin:7px 0;cursor:pointer;font-size:13px}.example:hover{background:#f7f9fc}
+.tip{padding:11px;border-radius:8px;background:#f4f7ff;border-left:4px solid var(--blue);font-size:13px;line-height:1.45}
+.warning{padding:11px;border-radius:8px;background:var(--yellow2);border-left:4px solid #f59f00;font-size:13px;line-height:1.45}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:24px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}} @media(max-width:650px){.grid2{grid-template-columns:1fr}}
+@media print{header{color:#000;background:white}.toolbar,.side,footer,.verify{display:none}.layout{display:block}.card{box-shadow:none;border:0}.step{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header>
+<h1>🔎 5-Why + Root Cause Verification Simulator</h1>
+<p>Don't just ask “Why?” — test whether each Why is logical, evidence-based and verifiable.</p>
+</header>
+
+<div class="container">
+<div class="toolbar">
+<button class="primary" onclick="addWhy()">＋ Add Why</button>
+<button class="secondary" onclick="removeWhy()">− Remove Last</button>
+<button class="secondary" onclick="loadExample('test')">🧪 Electronics Example</button>
+<button class="secondary" onclick="loadExample('connector')">🔌 Connector Example</button>
+<button class="secondary" onclick="loadExample('process')">📋 Process Example</button>
+<button class="secondary" onclick="clearAll()">Clear</button>
+<button class="secondary" onclick="window.print()">🖨 Print / PDF</button>
+</div>
+
+<div class="layout">
+<main class="card">
+<h2>Build and Verify Your 5-Why Chain</h2>
+<p class="hint">For every Why, provide evidence and challenge the statement. A plausible statement is not automatically a root cause.</p>
+
+<div class="problem">
+<label>Problem / Symptom</label>
+<textarea id="problem" placeholder="Example: PCBA failed final functional test with low output voltage."></textarea>
+</div>
+
+<div id="steps"></div>
+
+<div class="summary">
+<h3>📊 Analysis Quality</h3>
+<div><span class="bigscore" id="totalScore">0</span> / 100</div>
+<div class="bar"><div class="fill" id="scoreFill"></div></div>
+<div class="badges">
+<span class="badge" id="chainBadge">No Why statements yet</span>
+<span class="badge" id="evidenceBadge">Evidence: 0%</span>
+<span class="badge" id="verifyBadge">Verification: 0%</span>
+</div>
+<p id="overallText" class="hint" style="margin-top:10px">Enter a problem and at least one Why to begin.</p>
+</div>
+</main>
+
+<aside class="card side">
+<div class="sidebox">
+<h3>🎯 What makes a strong Why?</h3>
+<div class="tip">
+A strong Why should <b>directly explain the previous statement</b>, be supported by evidence, and lead to a cause that can be tested or controlled.
+</div>
+</div>
+
+<div class="sidebox">
+<h3>✅ Verification checklist</h3>
+<div class="check"><input type="checkbox"> <span><b>Evidence</b><br><span class="help">Do I have data, measurement, observation or record?</span></span></div>
+<div class="check"><input type="checkbox"> <span><b>Direct causal link</b><br><span class="help">Does this actually explain the previous statement?</span></span></div>
+<div class="check"><input type="checkbox"> <span><b>Reproducible</b><br><span class="help">Can the failure be reproduced by introducing this cause?</span></span></div>
+<div class="check"><input type="checkbox"> <span><b>Counterfactual test</b><br><span class="help">Does removing the cause remove the problem?</span></span></div>
+<div class="check"><input type="checkbox"> <span><b>Specific</b><br><span class="help">Is the cause specific enough to act on?</span></span></div>
+</div>
+
+<div class="sidebox">
+<h3>⚠️ Common traps</h3>
+<div class="warning">
+Avoid statements such as <b>“probably”</b>, <b>“operator error”</b>, <b>“poor quality”</b>, or <b>“needs more training”</b> unless they are supported by evidence.
+<br><br>
+Also remember: <b>5 is not a magic number.</b> Stop when you reach a verified, controllable cause.
+</div>
+</div>
+
+<div class="sidebox">
+<h3>🔬 Root Cause Test</h3>
+<p class="hint">Ask: <b>“If I remove this cause, should the failure disappear?”</b></p>
+<textarea id="prediction" placeholder="Expected result if the proposed root cause is removed..."></textarea>
+<label>Verification result</label>
+<textarea id="result" placeholder="What happened when you tested it?"></textarea>
+</div>
+</aside>
+</div>
+</div>
+
+<footer>Standalone HTML • No Python or server required • Suitable for GitHub Pages</footer>
+
+<script>
+let whyCount=1;
+
+const examples={
+test:{
+problem:"PCBA failed final functional test with low output voltage.",
+whys:[
+["The measured output voltage was below the test limit.","Output = 3.1 V; specification minimum = 4.8 V.",[1,1,0,0,1]],
+["The regulator input voltage was below its required value.","Vin measured 4.2 V instead of the specified 5.0 V.",[1,1,1,0,1]],
+["The test fixture was dropping excessive voltage at the input connection.","Voltage drop across the fixture contact was measured at 0.8 V.",[1,1,1,1,1]],
+["The connector contact had excessive resistance.","Contact resistance measured 1.6 Ω; known-good contact measured <0.1 Ω.",[1,1,1,1,1]],
+["The connector contact was worn after exceeding its service-life criterion.","Inspection showed contact wear and the fixture had exceeded its defined mating-cycle limit.",[1,1,1,1,1]]
+]},
+connector:{
+problem:"Intermittent communication failure was observed during final test.",
+whys:[
+["The communication signal was intermittently lost.","Failure was reproduced during 8 of 20 test cycles.",[1,1,1,0,1]],
+["The connector signal was intermittently open.","Continuity dropped during controlled connector movement.",[1,1,1,1,1]],
+["The connector contact was not maintaining sufficient mating force.","Contact force was below the supplier's specified range.",[1,1,1,1,1]],
+["The contact had degraded after repeated mating cycles.","Microscope inspection showed mechanical wear.",[1,1,1,0,1]],
+["The connector had exceeded its specified mating-cycle life without a replacement criterion.","Maintenance records showed the fixture had exceeded the stated cycle limit.",[1,1,1,1,1]]
+]},
+process:{
+problem:"A PCBA was tested using an incorrect test procedure.",
+whys:[
+["The technician selected an obsolete procedure.","The revision number on the executed record did not match the controlled revision.",[1,1,0,0,1]],
+["The obsolete procedure was still available at the workstation.","A local copy was found in the workstation test folder.",[1,1,1,0,1]],
+["The document control process did not remove superseded local copies.","Review found no defined local-copy removal step.",[1,1,0,0,1]],
+["Local copies were being stored outside the controlled document location.","Multiple obsolete files were found on local PCs.",[1,1,1,0,1]],
+["There was no defined control method for locally stored test procedures.","The released procedure did not define ownership or cleanup responsibility.",[1,1,0,0,1]]
+]}
+};
+
+function makeStep(data=[],i){
+ const s=document.createElement("div");s.className="step";
+ const vals=data[0]||"", evidence=data[1]||"", checks=data[2]||[0,0,0,0,0];
+ s.innerHTML=`
+ <div class="stephead"><div class="num">${i}</div><strong>Why ${i}?</strong><span class="score yellow" id="score${i}">0 / 10</span></div>
+ <div class="stepbody">
+ <label>Why statement</label>
+ <textarea id="why${i}" placeholder="Why did the previous problem occur?">${vals}</textarea>
+ <label>Evidence supporting this statement</label>
+ <textarea id="evidence${i}" placeholder="Measurement, observation, record, test result, data...">${evidence}</textarea>
+ <div class="verify">
+ <label>Verification checks</label>
+ ${checkHTML(i,0,"Evidence exists","Do you have objective support for the statement?",checks[0])}
+ ${checkHTML(i,1,"Direct causal link","Does this directly explain the previous statement?",checks[1])}
+ ${checkHTML(i,2,"Reproducible","Can the failure be reproduced by introducing this cause?",checks[2])}
+ ${checkHTML(i,3,"Counterfactual","If this cause is removed, does the problem disappear?",checks[3])}
+ ${checkHTML(i,4,"Specific / actionable","Is the cause specific enough to control or eliminate?",checks[4])}
+ <div class="verdict vyellow" id="verdict${i}">Enter a statement and evidence, then verify it.</div>
+ </div></div>`;
+ return s;
+}
+function checkHTML(i,j,title,help,val){
+ return `<div class="check"><input type="checkbox" id="c${i}_${j}" ${val?'checked':''} onchange="updateScores()">
+ <span><b>${title}</b><br><span class="help">${help}</span></span></div>`;
+}
+function render(data=[]){
+ const box=document.getElementById("steps");box.innerHTML="";
+ for(let i=1;i<=whyCount;i++){
+  box.appendChild(makeStep(data[i-1]||[],i));
+  if(i<whyCount){let a=document.createElement("div");a.className="arrow";a.textContent="↓";box.appendChild(a)}
+ }
+ updateScores();
+}
+function addWhy(){if(whyCount>=10){alert("Maximum 10 Why levels.");return} whyCount++;render();document.getElementById("why"+whyCount).focus()}
+function removeWhy(){if(whyCount>1){whyCount--;render()}}
+function updateScores(){
+ let total=0, max=0, evidence=0, verified=0, filled=0;
+ for(let i=1;i<=whyCount;i++){
+  let w=document.getElementById("why"+i), e=document.getElementById("evidence"+i);
+  let hasW=w&&w.value.trim(), hasE=e&&e.value.trim();
+  if(hasW)filled++;
+  let points=0;
+  for(let j=0;j<5;j++){
+   if(document.getElementById(`c${i}_${j}`)?.checked)points+=2;
+  }
+  if(hasE)points=Math.min(10,points+1);
+  total+=points;max+=10;if(hasE)evidence++;
+  let verifiedChecks=[2,3].filter(j=>document.getElementById(`c${i}_${j}`)?.checked).length;
+  if(verifiedChecks===2)verified++;
+  let sc=document.getElementById("score"+i), v=document.getElementById("verdict"+i);
+  if(sc){
+   sc.textContent=points+" / 10";
+   sc.className="score "+(points>=8?"green":points>=5?"yellow":"red");
+  }
+  if(v){
+   if(!hasW)v.textContent="Enter a Why statement.";
+   else if(points>=8)v.textContent="🟢 Strong — evidence and verification support this Why.";
+   else if(points>=5)v.textContent="🟡 Potential cause — strengthen evidence or verification.";
+   else v.textContent="🔴 Weak — this Why needs evidence, causal logic or verification.";
+   v.className="verdict "+(points>=8?"vgreen":points>=5?"vyellow":"vred");
+  }
+ }
+ let score=max?Math.round(total/max*100):0;
+ document.getElementById("totalScore").textContent=score;
+ document.getElementById("scoreFill").style.width=score+"%";
+ document.getElementById("chainBadge").textContent=filled+" / "+whyCount+" Why statements completed";
+ document.getElementById("evidenceBadge").textContent="Evidence: "+Math.round(evidence/whyCount*100)+"%";
+ document.getElementById("verifyBadge").textContent="Verification: "+Math.round(verified/whyCount*100)+"%";
+ let t=document.getElementById("overallText");
+ if(!filled)t.textContent="Enter a problem and at least one Why to begin.";
+ else if(score>=80)t.textContent="🟢 Strong analysis. Your chain is well supported. Confirm the final cause with a corrective-action test.";
+ else if(score>=60)t.textContent="🟡 Reasonable start. Some Why statements still need stronger evidence or verification.";
+ else t.textContent="🔴 The chain is mostly hypothetical. Add evidence and test the causal relationships before calling the final statement a root cause.";
+}
+function loadExample(type){
+ const ex=examples[type];if(!ex)return;
+ document.getElementById("problem").value=ex.problem;
+ whyCount=ex.whys.length;render(ex.whys);
+ document.getElementById("prediction").value="If the proposed root cause is removed, the original failure should no longer occur.";
+ document.getElementById("result").value="";
+}
+function clearAll(){
+ if(!confirm("Clear the current analysis?"))return;
+ document.getElementById("problem").value="";
+ document.getElementById("prediction").value="";
+ document.getElementById("result").value="";
+ whyCount=1;render();
+}
+document.addEventListener("input",e=>{if(e.target.tagName==="TEXTAREA")updateScores()});
+render();
+</script>
+</body>
+</html>
